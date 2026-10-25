@@ -46,7 +46,7 @@ int getSquareDistance(int x1, int z1, int x2, int z2, int shift) {
 
 int getAngleFromPos(int x, int z) {
 	if (0) { // use pre-computed table
-		const int angle = (int)(atan2(x, z) * 512 / M_PI);
+		const int angle = (int)(atan2(x, z) * 512 / 3.14159265358979323846);
 		if (angle < 0) {
 			return angle + 1024;
 		} else {

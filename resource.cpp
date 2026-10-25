@@ -311,13 +311,13 @@ void Resource::loadTrigo() {
 		fileClose(fp);
 	} else {
 		for (int i = 0; i < 1024; ++i) {
-			const double a = i * 2 * M_PI / 1024.;
+			const double a = i * 2 * 3.14159265358979323846 / 1024.;
 			g_sin[i] = (int32_t)(sin(a) * 32767);
 			g_cos[i] = (int32_t)(cos(a) * 32767);
 		}
 		g_atan[0] = 0;
 		for (int i = 1; i < 256; ++i) {
-			g_atan[i] = (int32_t)(atan(i / 256.) * (1024. / 2) / M_PI);
+			g_atan[i] = (int32_t)(atan(i / 256.) * (1024. / 2) / 3.14159265358979323846);
 		}
 	}
 }

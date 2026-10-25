@@ -3,7 +3,8 @@
  * Copyright (C) 2006-2012 Gregory Montoir (cyx@users.sourceforge.net)
  */
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,7 +37,7 @@ static const int kJoystickCommitValue = 16384;
 static const int kJoystickMapSize = 8;
 static int gJoystickMap[kJoystickMapSize];
 
-static const int kGamepadMapSize = SDL_CONTROLLER_BUTTON_MAX;
+static const int kGamepadMapSize = SDL_GAMEPAD_BUTTON_COUNT;
 static int gGamepadMap[kGamepadMapSize];
 
 static const int gKeyScancodeMapSize = 512;
@@ -73,17 +74,17 @@ static int readKeyMap(FILE *fp) {
 		const char *name;
 		int code;
 	} buttons[] = {
-		{ "back", SDL_CONTROLLER_BUTTON_BACK },
-		{ "guide", SDL_CONTROLLER_BUTTON_GUIDE },
-		{ "start", SDL_CONTROLLER_BUTTON_START },
-		{ "leftstick", SDL_CONTROLLER_BUTTON_LEFTSTICK },
-		{ "leftshoulder", SDL_CONTROLLER_BUTTON_LEFTSHOULDER },
-		{ "rightstick", SDL_CONTROLLER_BUTTON_RIGHTSTICK },
-		{ "rightshoulder", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER },
-		{ "a", SDL_CONTROLLER_BUTTON_A },
-		{ "b", SDL_CONTROLLER_BUTTON_B },
-		{ "x", SDL_CONTROLLER_BUTTON_X },
-		{ "y", SDL_CONTROLLER_BUTTON_Y },
+		{ "back", SDL_GAMEPAD_BUTTON_BACK },
+		{ "guide", SDL_GAMEPAD_BUTTON_GUIDE },
+		{ "start", SDL_GAMEPAD_BUTTON_START },
+		{ "leftstick", SDL_GAMEPAD_BUTTON_LEFT_STICK },
+		{ "leftshoulder", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER },
+		{ "rightstick", SDL_GAMEPAD_BUTTON_RIGHT_STICK },
+		{ "rightshoulder", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER },
+		{ "a", SDL_GAMEPAD_BUTTON_SOUTH },
+		{ "b", SDL_GAMEPAD_BUTTON_EAST },
+		{ "x", SDL_GAMEPAD_BUTTON_WEST },
+		{ "y", SDL_GAMEPAD_BUTTON_NORTH },
 		{ 0, -1 }
 	};
 	int lineNumber = 0;
@@ -156,10 +157,10 @@ static void setupKeyMap() {
 	gKeyScancodeMap[SDL_SCANCODE_UP]     = kKeyCodeUp;
 	gKeyScancodeMap[SDL_SCANCODE_DOWN]   = kKeyCodeDown;
 	// gamepad
-	gGamepadMap[SDL_CONTROLLER_BUTTON_DPAD_UP]    = kKeyCodeUp;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_DPAD_DOWN]  = kKeyCodeDown;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_DPAD_LEFT]  = kKeyCodeLeft;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = kKeyCodeRight;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_DPAD_UP]    = kKeyCodeUp;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_DPAD_DOWN]  = kKeyCodeDown;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_DPAD_LEFT]  = kKeyCodeLeft;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_DPAD_RIGHT] = kKeyCodeRight;
 
 	// read controls mapping from file
 	FILE *fp = fopen(kControlsCfg, "rb");
@@ -204,48 +205,59 @@ static void setupKeyMap() {
 	gJoystickMap[6] = kKeyCodeU;
 	gJoystickMap[7] = kKeyCodeReturn;
 	// gamecontroller buttons
-	gGamepadMap[SDL_CONTROLLER_BUTTON_A] = kKeyCodeAlt;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_B] = kKeyCodeSpace;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_X] = kKeyCodeCtrl;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_Y] = kKeyCodeU;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_BACK]  = kKeyCodeEscape;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_GUIDE] = kKeyCodeI;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_START] = kKeyCodeI;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_LEFTSTICK]     = kKeyCodeJ;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_LEFTSHOULDER]  = kKeyCodeJ;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_RIGHTSTICK]    = kKeyCodeShift;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = kKeyCodeShift;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_DPAD_UP]    = kKeyCodeUp;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_DPAD_DOWN]  = kKeyCodeDown;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_DPAD_LEFT]  = kKeyCodeLeft;
-	gGamepadMap[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = kKeyCodeRight;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_SOUTH] = kKeyCodeAlt;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_EAST] = kKeyCodeSpace;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_WEST] = kKeyCodeCtrl;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_NORTH] = kKeyCodeU;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_BACK]  = kKeyCodeEscape;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_GUIDE] = kKeyCodeI;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_START] = kKeyCodeI;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_LEFT_STICK]     = kKeyCodeJ;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER]  = kKeyCodeJ;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_RIGHT_STICK]    = kKeyCodeShift;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = kKeyCodeShift;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_DPAD_UP]    = kKeyCodeUp;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_DPAD_DOWN]  = kKeyCodeDown;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_DPAD_LEFT]  = kKeyCodeLeft;
+	gGamepadMap[SDL_GAMEPAD_BUTTON_DPAD_RIGHT] = kKeyCodeRight;
+}
+
+static SDL_AudioStream *gAudioStream;
+static StubMixProc gMix;
+
+static void audioStreamCallback(void *userdata, SDL_AudioStream *stream, int additionalAmount, int totalAmount) {
+	StubMixProc *mix = (StubMixProc *)userdata;
+	const int amount = additionalAmount;
+	if (!mix || !mix->proc || amount <= 0) {
+		return;
+	}
+	uint8_t *buffer = (uint8_t *)SDL_malloc((size_t)amount);
+	if (buffer) {
+		mix->proc(mix->data, buffer, amount);
+		SDL_PutAudioStreamData(stream, buffer, amount);
+		SDL_free(buffer);
+	}
 }
 
 static void lockAudio(int lock) {
-	if (lock) {
-		SDL_LockAudio();
-	} else {
-		SDL_UnlockAudio();
+	if (gAudioStream) {
+		if (lock) SDL_LockAudioStream(gAudioStream);
+		else SDL_UnlockAudioStream(gAudioStream);
 	}
 }
 
 static void setupAudio(GameStub *stub) {
 	SDL_AudioSpec desired;
-	memset(&desired, 0, sizeof(desired));
+	SDL_zero(desired);
 	desired.freq = 22050;
-	desired.format = AUDIO_S16SYS;
+	desired.format = SDL_AUDIO_S16;
 	desired.channels = 2;
-	desired.samples = 4096;
-	StubMixProc mix = stub->getMixProc(desired.freq, desired.format, lockAudio);
-	if (mix.proc) {
-		desired.callback = mix.proc;
-		desired.userdata = mix.data;
-		if (SDL_OpenAudio(&desired, 0) == 0) {
-			SDL_PauseAudio(0);
-		}
+	gMix = stub->getMixProc(desired.freq, desired.format, lockAudio);
+	if (gMix.proc) {
+		gAudioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &desired, audioStreamCallback, &gMix);
+		if (gAudioStream) SDL_ResumeAudioStreamDevice(gAudioStream);
 	}
 }
-
 static void setAspectRatio(int w, int h) {
 	const float currentAspectRatio = w / (float)h;
 	// pillar box
@@ -277,6 +289,7 @@ static int transformPointerY(int y) {
 }
 
 int main(int argc, char *argv[]) {
+	SDL_SetMainReady();
 	GameStub *stub = GameStub_create();
 	if (!stub) {
 		return -1;
@@ -285,28 +298,29 @@ int main(int argc, char *argv[]) {
 	if (ret != 0) {
 		return ret;
 	}
-	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC);
-	SDL_ShowCursor(stub->hasCursor() ? SDL_ENABLE : SDL_DISABLE);
-	bool widescreen = false;
-	SDL_DisplayMode dm;
-	if (SDL_GetDesktopDisplayMode(0, &dm) == 0 && 0) {
-		widescreen = ((dm.w / (float)dm.h) >= (16 / 9.));
+	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC)) {
+		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+		return -1;
 	}
+	if (stub->hasCursor()) SDL_ShowCursor(); else SDL_HideCursor();
+	bool widescreen = false;
+
 	const int displayMode = stub->getDisplayMode();
 	gAspectRatio = stub->getAspectRatio(widescreen);
 	gWindowH = gWindowW / gAspectRatio;
 	int flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
 	if (displayMode != kDisplayModeWindow) {
-		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+		flags |= SDL_WINDOW_FULLSCREEN;
 	}
-	SDL_Window *window = SDL_CreateWindow(g_caption, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, gWindowW, gWindowH, flags);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_Window *window = SDL_CreateWindow(g_caption, gWindowW, gWindowH, (SDL_WindowFlags)flags);
 	if (!window) {
 		return -1;
 	}
 	SDL_Surface *icon = SDL_LoadBMP(kIconBmp);
 	if (icon) {
 		SDL_SetWindowIcon(window, icon);
-		SDL_FreeSurface(icon);
+		SDL_DestroySurface(icon);
 	}
 	SDL_GetWindowSize(window, &gWindowW, &gWindowH);
 	_aspectRatio[0] = 0.;
@@ -315,7 +329,6 @@ int main(int argc, char *argv[]) {
 	_aspectRatio[3] = 1.;
 	setAspectRatio(gWindowW, gWindowH);
 	SDL_GLContext glcontext = SDL_GL_CreateContext(window);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetSwapInterval(1);
 	ret = stub->init();
 	if (ret != 0) {
@@ -324,29 +337,33 @@ int main(int argc, char *argv[]) {
 	setupKeyMap();
 	setupAudio(stub);
 	SDL_Joystick *joystick = 0;
-	SDL_GameController *controller = 0;
+	SDL_JoystickID joystickID = 0;
+	SDL_Gamepad *controller = 0;
 	SDL_Haptic *haptic = 0;
-	if (SDL_NumJoysticks() > 0) {
-		SDL_GameControllerAddMappingsFromFile("gamecontrollerdb.txt");
-		if (SDL_IsGameController(kJoystickDefaultIndex)) {
-			controller = SDL_GameControllerOpen(kJoystickDefaultIndex);
+	int joystickCount = 0;
+	SDL_JoystickID *joystickIDs = SDL_GetJoysticks(&joystickCount);
+	if (joystickCount > 0 && joystickIDs) {
+		joystickID = joystickIDs[kJoystickDefaultIndex];
+		SDL_AddGamepadMappingsFromFile("gamecontrollerdb.txt");
+		if (SDL_IsGamepad(joystickID)) {
+			controller = SDL_OpenGamepad(joystickID);
 			if (controller) {
-				fprintf(stdout, "Using controller '%s'\n", SDL_GameControllerName(controller));
-				haptic = SDL_HapticOpenFromJoystick(SDL_GameControllerGetJoystick(controller));
+				fprintf(stdout, "Using controller '%s'\n", SDL_GetGamepadName(controller));
+
 			}
 		}
 		if (!controller) {
 			// no controller found, look for joystick
-			joystick = SDL_JoystickOpen(kJoystickDefaultIndex);
+			joystick = SDL_OpenJoystick(joystickID);
 			if (joystick) {
-				fprintf(stdout, "Using joystick '%s'\n", SDL_JoystickName(joystick));
-				haptic = SDL_HapticOpenFromJoystick(joystick);
+				fprintf(stdout, "Using joystick '%s'\n", SDL_GetJoystickName(joystick));
+				haptic = SDL_OpenHapticFromJoystick(joystick);
 			}
 		}
 		if (haptic) {
 			if (!SDL_HapticRumbleSupported(haptic)) {
 				// not supported, release the resource now
-				SDL_HapticClose(haptic);
+				SDL_CloseHaptic(haptic);
 				haptic = 0;
 			}
 		}
@@ -361,27 +378,26 @@ int main(int argc, char *argv[]) {
 		const uint32_t nextTick = SDL_GetTicks() + kTickDuration;
 		while (SDL_PollEvent(&ev)) {
 			switch (ev.type) {
-			case SDL_QUIT:
+			case SDL_EVENT_QUIT:
 				quitGame = true;
 				break;
-			case SDL_WINDOWEVENT:
-				switch (ev.window.event) {
-				case SDL_WINDOWEVENT_RESIZED:
-					w = ev.window.data1;
-					h = ev.window.data2;
-					break;
-				case SDL_WINDOWEVENT_FOCUS_GAINED:
-				case SDL_WINDOWEVENT_FOCUS_LOST:
-					paused = (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST);
-					SDL_PauseAudio(paused);
-					break;
+			case SDL_EVENT_WINDOW_RESIZED:
+				w = ev.window.data1;
+				h = ev.window.data2;
+				break;
+			case SDL_EVENT_WINDOW_FOCUS_GAINED:
+			case SDL_EVENT_WINDOW_FOCUS_LOST:
+				paused = (ev.type == SDL_EVENT_WINDOW_FOCUS_LOST);
+				if (gAudioStream) {
+					if (paused) SDL_PauseAudioStreamDevice(gAudioStream);
+					else SDL_ResumeAudioStreamDevice(gAudioStream);
 				}
 				break;
-			case SDL_KEYUP:
-				if (gKeyScancodeMap[ev.key.keysym.scancode] != 0) {
-					stub->queueKeyInput(gKeyScancodeMap[ev.key.keysym.scancode], 0);
+			case SDL_EVENT_KEY_UP:
+				if (gKeyScancodeMap[ev.key.scancode] != 0) {
+					stub->queueKeyInput(gKeyScancodeMap[ev.key.scancode], 0);
 				} else {
-					switch (ev.key.keysym.sym) {
+					switch (ev.key.key) {
 					case SDLK_PAGEUP:
 						if (gScale < 8) {
 							++gScale;
@@ -399,30 +415,30 @@ int main(int argc, char *argv[]) {
 					case SDLK_EXCLAIM:
 						stub->queueKeyInput(kKeyCodeCheatLifeCounter, 1);
 						break;
-					case SDLK_s:
+					case SDLK_S:
 						stub->saveState(gSaveSlot);
 						break;
-					case SDLK_l:
+					case SDLK_L:
 						stub->loadState(gSaveSlot);
 						break;
-					case SDLK_t:
+					case SDLK_T:
 						stub->takeScreenshot();
 						break;
-					case SDLK_p:
+					case SDLK_P:
 					case SDLK_PLUS:
 					case SDLK_KP_PLUS:
 						if (gSaveSlot < 99) {
 							++gSaveSlot;
 						}
 						break;
-					case SDLK_m:
+					case SDLK_M:
 					case SDLK_MINUS:
 					case SDLK_KP_MINUS:
 						if (gSaveSlot > 1) {
 							--gSaveSlot;
 						}
 						break;
-					case SDLK_q:
+					case SDLK_Q:
 						quitGame = true;
 						break;
 					case SDLK_F1:
@@ -434,12 +450,12 @@ int main(int argc, char *argv[]) {
 					}
 				}
 				break;
-			case SDL_KEYDOWN:
-				if (gKeyScancodeMap[ev.key.keysym.scancode] != 0) {
-					stub->queueKeyInput(gKeyScancodeMap[ev.key.keysym.scancode], 1);
+			case SDL_EVENT_KEY_DOWN:
+				if (gKeyScancodeMap[ev.key.scancode] != 0) {
+					stub->queueKeyInput(gKeyScancodeMap[ev.key.scancode], 1);
 				}
 				break;
-			case SDL_JOYHATMOTION:
+			case SDL_EVENT_JOYSTICK_HAT_MOTION:
 				if (joystick) {
 					stub->queueKeyInput(kKeyCodeUp,    (ev.jhat.value & SDL_HAT_UP)    != 0);
 					stub->queueKeyInput(kKeyCodeDown,  (ev.jhat.value & SDL_HAT_DOWN)  != 0);
@@ -447,7 +463,7 @@ int main(int argc, char *argv[]) {
 					stub->queueKeyInput(kKeyCodeRight, (ev.jhat.value & SDL_HAT_RIGHT) != 0);
 				}
 				break;
-			case SDL_JOYAXISMOTION:
+			case SDL_EVENT_JOYSTICK_AXIS_MOTION:
 				if (joystick) {
 					switch (ev.jaxis.axis) {
 					case 0:
@@ -461,56 +477,56 @@ int main(int argc, char *argv[]) {
 					}
 				}
 				break;
-			case SDL_JOYBUTTONDOWN:
-			case SDL_JOYBUTTONUP:
+			case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+			case SDL_EVENT_JOYSTICK_BUTTON_UP:
 				if (joystick) {
-					if (ev.jbutton.button >= 0 && ev.jbutton.button < kJoystickMapSize) {
+					if (ev.jbutton.button < kJoystickMapSize) {
 						if (gJoystickMap[ev.jbutton.button] != 0) {
-							stub->queueKeyInput(gJoystickMap[ev.jbutton.button], ev.jbutton.state == SDL_PRESSED);
+							stub->queueKeyInput(gJoystickMap[ev.jbutton.button], ev.jbutton.down);
 						}
 					}
 				}
 				break;
-			case SDL_CONTROLLERAXISMOTION:
+			case SDL_EVENT_GAMEPAD_AXIS_MOTION:
 				if (controller) {
-					switch (ev.caxis.axis) {
-					case SDL_CONTROLLER_AXIS_LEFTX:
-					case SDL_CONTROLLER_AXIS_RIGHTX:
-						stub->queueKeyInput(kKeyCodeLeft,  (ev.caxis.value < -kJoystickCommitValue));
-						stub->queueKeyInput(kKeyCodeRight, (ev.caxis.value >  kJoystickCommitValue));
+					switch (ev.gaxis.axis) {
+					case SDL_GAMEPAD_AXIS_LEFTX:
+					case SDL_GAMEPAD_AXIS_RIGHTX:
+						stub->queueKeyInput(kKeyCodeLeft,  (ev.gaxis.value < -kJoystickCommitValue));
+						stub->queueKeyInput(kKeyCodeRight, (ev.gaxis.value >  kJoystickCommitValue));
 						break;
-					case SDL_CONTROLLER_AXIS_LEFTY:
-					case SDL_CONTROLLER_AXIS_RIGHTY:
-						stub->queueKeyInput(kKeyCodeUp,   (ev.caxis.value < -kJoystickCommitValue));
-						stub->queueKeyInput(kKeyCodeDown, (ev.caxis.value >  kJoystickCommitValue));
+					case SDL_GAMEPAD_AXIS_LEFTY:
+					case SDL_GAMEPAD_AXIS_RIGHTY:
+						stub->queueKeyInput(kKeyCodeUp,   (ev.gaxis.value < -kJoystickCommitValue));
+						stub->queueKeyInput(kKeyCodeDown, (ev.gaxis.value >  kJoystickCommitValue));
 						break;
 					}
 				}
 				break;
-			case SDL_CONTROLLERBUTTONDOWN:
-			case SDL_CONTROLLERBUTTONUP:
-				if (controller) {
-					if (gGamepadMap[ev.cbutton.button] != 0) {
-						stub->queueKeyInput(gGamepadMap[ev.cbutton.button], ev.cbutton.state == SDL_PRESSED);
+			case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+			case SDL_EVENT_GAMEPAD_BUTTON_UP:
+				if (controller && ev.gbutton.button < kGamepadMapSize) {
+					if (gGamepadMap[ev.gbutton.button] != 0) {
+						stub->queueKeyInput(gGamepadMap[ev.gbutton.button], ev.gbutton.down);
 					}
 				}
 				break;
-			case SDL_MOUSEMOTION:
-				if (ev.motion.state & SDL_BUTTON_LMASK) {
+			case SDL_EVENT_MOUSE_MOTION:
+				if (ev.motion.state & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) {
 					stub->queueTouchInput(0, transformPointerX(ev.motion.x), transformPointerY(ev.motion.y), 1);
 				}
-				if (ev.motion.state & SDL_BUTTON_RMASK) {
+				if (ev.motion.state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
 					stub->queueTouchInput(1, transformPointerX(ev.motion.x), transformPointerY(ev.motion.y), 1);
 				}
 				break;
-			case SDL_MOUSEBUTTONDOWN:
-			case SDL_MOUSEBUTTONUP:
+			case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			case SDL_EVENT_MOUSE_BUTTON_UP:
 				switch (ev.button.button) {
 				case SDL_BUTTON_LEFT:
-					stub->queueTouchInput(0, transformPointerX(ev.button.x), transformPointerY(ev.button.y), ev.button.state == SDL_PRESSED);
+					stub->queueTouchInput(0, transformPointerX(ev.button.x), transformPointerY(ev.button.y), ev.button.down);
 					break;
 				case SDL_BUTTON_RIGHT:
-					stub->queueTouchInput(1, transformPointerX(ev.button.x), transformPointerY(ev.button.y), ev.button.state == SDL_PRESSED);
+					stub->queueTouchInput(1, transformPointerX(ev.button.x), transformPointerY(ev.button.y), ev.button.down);
 					break;
 				}
 				break;
@@ -533,9 +549,11 @@ int main(int argc, char *argv[]) {
 			stub->drawGL();
 			SDL_GL_SwapWindow(window);
 			if (stub->shouldVibrate()) {
-				if (haptic) {
-					SDL_HapticRumbleInit(haptic);
-					SDL_HapticRumblePlay(haptic, 1., 500);
+				if (controller) {
+					SDL_RumbleGamepad(controller, 0xFFFF, 0xFFFF, 500);
+				} else if (haptic) {
+					SDL_InitHapticRumble(haptic);
+					SDL_PlayHapticRumble(haptic, 1., 500);
 				}
 			}
 			const int delayTick = nextTick - SDL_GetTicks();
@@ -544,19 +562,21 @@ int main(int argc, char *argv[]) {
 			SDL_Delay(kTickDuration);
 		}
 	}
-	SDL_PauseAudio(1);
+	if (gAudioStream) SDL_PauseAudioStreamDevice(gAudioStream);
 	stub->quit();
-	SDL_GL_DeleteContext(glcontext);
+	SDL_GL_DestroyContext(glcontext);
 	SDL_DestroyWindow(window);
 	if (controller) {
-		SDL_GameControllerClose(controller);
+		SDL_CloseGamepad(controller);
 	}
 	if (joystick) {
-		SDL_JoystickClose(joystick);
+		SDL_CloseJoystick(joystick);
 	}
 	if (haptic) {
-		SDL_HapticClose(haptic);
+		SDL_CloseHaptic(haptic);
 	}
+	SDL_free(joystickIDs);
+	if (gAudioStream) SDL_DestroyAudioStream(gAudioStream);
 	SDL_Quit();
 	return 0;
 }

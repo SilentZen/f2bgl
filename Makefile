@@ -1,6 +1,6 @@
 
-SDL_CFLAGS = `sdl2-config --cflags`
-SDL_LIBS = `sdl2-config --libs`
+SDL_CFLAGS = `pkg-config --cflags sdl3`
+SDL_LIBS = `pkg-config --libs sdl3`
 
 LIBS = $(SDL_LIBS) -lGL -lz -lWildMidi -lfluidsynth -lm
 

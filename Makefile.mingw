@@ -1,6 +1,6 @@
 
-SDL_CFLAGS := `sdl2-config --cflags`
-SDL_LIBS   := `sdl2-config --libs`
+SDL_CFLAGS := `pkg-config --cflags sdl3`
+SDL_LIBS   := `pkg-config --libs sdl3`
 
 CXX      := i686-w64-mingw32-g++
 STRIP    := i686-w64-mingw32-strip
@@ -10,7 +10,7 @@ LTO      := -flto
 CXXFLAGS += -Wall -Wno-sign-compare -MMD $(FFMPEG_CFLAGS) $(SDL_CFLAGS) $(LTO)
 LDFLAGS  += $(LTO)
 
-LIBS = $(SDL_LIBS) -lopengl32 -lWildMidi.dll -lfluidsynth.dll
+LIBS = $(SDL_LIBS) -lopengl32 -lwildmidi -lfluidsynth
 
 SRCS = cabinet.cpp camera.cpp collision.cpp cutscene.cpp cutscenecin.cpp cutscenedps.cpp decoder.cpp file.cpp \
 	font.cpp game.cpp icons.cpp input.cpp installer.cpp inventory.cpp main.cpp mdec.cpp menu.cpp \

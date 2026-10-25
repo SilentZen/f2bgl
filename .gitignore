@@ -1,0 +1,6 @@
+/build/
+/deps/
+/installer/payload/
+/installer/*.zip
+/installer/*.exe
+/installer/footer.bin
