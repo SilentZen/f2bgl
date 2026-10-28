@@ -635,7 +635,11 @@ uint8_t *Resource::getData(int type, int16_t key, const char *name) {
 	assert(name);
 	uint32_t i, offset = 0;
 	debug(kDebug_RESOURCE, "Resource::getData() type %d key %d/%d name '%s'", type, key, _treesTableCount[type], name ? name : "()");
-	assert(key != 0 && key < _treesTableCount[type]);
+	if (key <= 0 || key >= _treesTableCount[type]) {
+		error("Resource::getData() invalid key %d for resource type %d (count %d)",
+			key, type, _treesTableCount[type]);
+		return 0;
+	}
 	uint8_t *data = _treesTable[type][key].data;
 	assert(type == kResType_ANI || type == kResType_P3D || (data && _treesTable[type][key].dataSize != 0));
 	if (strcmp(name, "CAMDATA") == 0) {
@@ -1186,22 +1190,17 @@ uint32_t Resource::seekVag(int num) {
 }
 
 void Resource::loadTreePsx(File *fp, int dataSize, int type) {
-
 	const bool hasKeys = (type == kResType_ANI || type == kResType_STM);
-
 	uint8_t header[0x20];
 	fileRead(fp, header, sizeof(header));
-
-	const int count = READ_LE_UINT32(header + 4);
-	const int sizeOfOffset = READ_LE_UINT32(header + 8);
-
+	const uint32_t count = READ_LE_UINT32(header + 4);
+	const uint32_t sizeOfOffset = READ_LE_UINT32(header + 8);
+	_treesTable[type] = ALLOC<ResTreeNode>(count);
+	_treesTableCount[type] = count;
 	uint32_t offset = sizeof(header) + count * sizeOfOffset;
 	if (hasKeys) {
 		offset += 2 * sizeof(uint16_t) * count;
 	}
-
-	_treesTable[type] = ALLOC<ResTreeNode>(count);
-	_treesTableCount[type] = count;
 	for (uint32_t j = 0; j < count; ++j) {
 		ResTreeNode *node = &_treesTable[type][j];
 		memset(node, 0, sizeof(ResTreeNode));

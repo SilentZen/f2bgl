@@ -135,10 +135,11 @@ struct GzipFile: File {
 struct FileSystem {
 	char **_fileList;
 	int _fileCount;
+	int _fileCapacity;
 	int _filePathSkipLen;
 
 	FileSystem() :
-		_fileList(0), _fileCount(0), _filePathSkipLen(0) {
+		_fileList(0), _fileCount(0), _fileCapacity(0), _filePathSkipLen(0) {
 	}
 	~FileSystem() {
 		for (int i = 0; i < _fileCount; ++i) {
@@ -161,11 +162,24 @@ struct FileSystem {
 					if (S_ISDIR(st.st_mode)) {
 						buildFileListFromDirectory(filePath);
 					} else {
-						_fileList = (char **)realloc(_fileList, (_fileCount + 1) * sizeof(char *));
-						if (_fileList) {
-							_fileList[_fileCount] = strdup(filePath + _filePathSkipLen);
-							++_fileCount;
+						if (_fileCount == _fileCapacity) {
+							const int capacity = _fileCapacity ? _fileCapacity * 2 : 128;
+							char **files = (char **)realloc(_fileList, capacity * sizeof(char *));
+							if (!files) {
+								closedir(d);
+								warning("Unable to grow data file list");
+								return;
+							}
+							_fileList = files;
+							_fileCapacity = capacity;
 						}
+						char *relativePath = strdup(filePath + _filePathSkipLen);
+						if (!relativePath) {
+							closedir(d);
+							warning("Unable to store data file path");
+							return;
+						}
+						_fileList[_fileCount++] = relativePath;
 					}
 				}
 			}
@@ -175,16 +189,34 @@ struct FileSystem {
 	void setDataDirectory(const char *dir) {
 		_filePathSkipLen = strlen(dir) + 1;
 		buildFileListFromDirectory(dir);
+		if (_fileCount > 1) {
+			qsort(_fileList, _fileCount, sizeof(char *), compareFilePaths);
+		}
 		debug(kDebug_FILE, "FileSystem::setDataDirectory('%s') %d files", dir, _fileCount);
 	}
 	const char *findPath(const char *file) const {
-		for (int i = 0; i < _fileCount; ++i) {
-			if (strcasecmp(_fileList[i], file) == 0) {
+		int first = 0;
+		int last = _fileCount;
+		while (first < last) {
+			const int mid = first + (last - first) / 2;
+			const int cmp = strcasecmp(file, _fileList[mid]);
+			if (cmp == 0) {
 				debug(kDebug_FILE, "FileSystem::findPath() '%s'", file);
-				return _fileList[i];
+				return _fileList[mid];
+			} else if (cmp < 0) {
+				last = mid;
+			} else {
+				first = mid + 1;
 			}
 		}
 		return 0;
+	}
+
+private:
+	static int compareFilePaths(const void *lhs, const void *rhs) {
+		const char *const *pathA = (const char *const *)lhs;
+		const char *const *pathB = (const char *const *)rhs;
+		return strcasecmp(*pathA, *pathB);
 	}
 };
 

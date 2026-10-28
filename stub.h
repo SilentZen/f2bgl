@@ -47,6 +47,9 @@ enum {
 struct GameStub {
 	virtual int setArgs(int argc, char *argv[]) = 0;
 	virtual int getDisplayMode() = 0;
+	virtual int getWindowWidth() const = 0;
+	virtual int getWindowHeight() const = 0;
+	virtual const char *getShaderName() const = 0;
 	virtual float getAspectRatio(bool widescreen) = 0;
 	virtual bool hasCursor() = 0;
 	virtual int init() = 0;

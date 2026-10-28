@@ -266,15 +266,31 @@ bool CutscenePlayer_Dps::load(int num) {
 	_fp = fileOpenPsx(filename, kFileType_PSX_VIDEO);
 	if (_fp) {
 		const int size = fileSize(_fp);
-		if ((size % kSectorSize) != 0) {
+		int dataOffset = 0;
+		uint8_t containerHeader[44];
+		if (size >= (int)sizeof(containerHeader)) {
+			fileSetPos(_fp, 0, kFilePosition_SET);
+			if (fileRead(_fp, containerHeader, sizeof(containerHeader)) == sizeof(containerHeader) &&
+				memcmp(containerHeader, "RIFF", 4) == 0 &&
+				memcmp(containerHeader + 8, "CDXA", 4) == 0 &&
+				memcmp(containerHeader + 36, "data", 4) == 0 &&
+				READ_LE_UINT32(containerHeader + 40) == (uint32_t)(size - sizeof(containerHeader))) {
+				dataOffset = sizeof(containerHeader);
+			}
+		}
+		const int sectorDataSize = size - dataOffset;
+		if ((sectorDataSize % kSectorSize) != 0) {
 			warning("Unexpected file size (%d bytes) for '%s', not a multiple of a raw CD sector size", size, filename);
 			fileClose(_fp);
 			_fp = 0;
-		} else if (!readHeader(&_header)) {
+		} else {
+			fileSetPos(_fp, dataOffset, kFilePosition_SET);
+		}
+		if (_fp && !readHeader(&_header)) {
 			warning("Unable to read cutscene file header");
 			fileClose(_fp);
 			_fp = 0;
-		} else {
+		} else if (_fp) {
 			_rgbaBuffer = (uint8_t *)malloc(_header.w * _header.h * sizeof(uint32_t));
 			_render->clearScreen();
 			_render->resizeOverlay(_header.w, _header.h, true, kCutscenePsxVideoWidth, kCutscenePsxVideoHeight);

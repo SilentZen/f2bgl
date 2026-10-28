@@ -4,6 +4,7 @@
  */
 
 #include <getopt.h>
+#include <stdio.h>
 #include "file.h"
 #include "game.h"
 #include "mixer.h"
@@ -14,6 +15,7 @@
 static const char *USAGE =
 	"Fade2Black/OpenGL\n"
 	"Usage: f2b [OPTIONS]...\n"
+	"  /? or --help                 Show this list of options\n"
 	"  --datapath=PATH             Path to PC data files (default '.')\n"
 	"  --language=EN|FR|GR|SP|IT   Language files to use (default 'EN')\n"
 	"  --playdemo                  Use inputs from .DEM files\n"
@@ -22,10 +24,12 @@ static const char *USAGE =
 	"  --subtitles                 Display cutscene subtitles\n"
 	"  --savepath=PATH             Path to save files (default '.')\n"
 	"  --fullscreen                Fullscreen display\n"
+	"  --resolution=WIDTHxHEIGHT   Window size (default 640x480)\n"
 	"  --fov=DEG                   Field of vision in degrees (75-130)\n"
 	"  --soundfont=FILE            SoundFont (.sf2) file for music\n"
 	"  --texturefilter=FILTER      Texture filter (default 'linear')\n"
 	"  --texturescaler=NAME        Texture scaler (default 'scale2x')\n"
+	"  --shader=NAME               Post-processing shader: none, crt-easymode, crt-geom, lcd-grid\n"
 	"  --mouse                     Enable mouse controls\n"
 	"  --no-fog                    Disable fog rendering\n"
 	"  --no-gouraud                Disable gouraud shading\n"
@@ -97,6 +101,7 @@ struct GameStub_F2B : GameStub {
 	GameParams _params;
 	FileLanguage  _fileLanguage, _fileVoice;
 	int _displayMode;
+	int _windowWidth, _windowHeight;
 	int _fov;
 	int _state, _nextState;
 	int _slotState;
@@ -107,10 +112,12 @@ struct GameStub_F2B : GameStub {
 	RenderParams _renderParams;
 	char *_textureFilter;
 	char *_textureScaler;
+	char *_shader;
 
 	GameStub_F2B()
 		: _render(0), _g(0),
-		_fileLanguage(kFileLanguage_EN), _fileVoice(kFileLanguage_EN), _displayMode(kDisplayModeWindow) {
+		_fileLanguage(kFileLanguage_EN), _fileVoice(kFileLanguage_EN), _displayMode(kDisplayModeWindow),
+		_windowWidth(640), _windowHeight(480) {
 		memset(&_params, 0, sizeof(_params));
 		_params.cheats = kCheatAutoReloadGun | kCheatActivateButtonToShoot | kCheatStepWithUpDownInShooting;
 		_soundFont = 0;
@@ -119,6 +126,7 @@ struct GameStub_F2B : GameStub {
 		_renderParams.gouraud = true;
 		_textureFilter = 0;
 		_textureScaler = 0;
+		_shader = strdup("none");
 		_fov = 0;
 	}
 
@@ -170,6 +178,12 @@ struct GameStub_F2B : GameStub {
 	}
 
 	virtual int setArgs(int argc, char *argv[]) {
+		for (int i = 1; i < argc; ++i) {
+			if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "/?") == 0) {
+				printf("%s", USAGE);
+				return 1;
+			}
+		}
 		char *language = 0;
 		char *voice = 0;
 		_nextState = kStateCutscene;
@@ -185,11 +199,13 @@ struct GameStub_F2B : GameStub {
 				{ "savepath",      required_argument, 0, 7 },
 				{ "debug",         required_argument, 0, 8 },
 				{ "fullscreen",    no_argument,       0, 9 },
+				{ "resolution",    required_argument, 0, 22 },
 				{ "fov",           required_argument, 0, 10 },
 				{ "alt-level",     required_argument, 0, 11 },
 				{ "soundfont",     required_argument, 0, 12 },
 				{ "texturefilter", required_argument, 0, 13 },
 				{ "texturescaler", required_argument, 0, 14 },
+				{ "shader",         required_argument, 0, 21 },
 				{ "mouse",         no_argument,       0, 15 },
 				{ "touch",         no_argument,       0, 16 },
 				{ "no-fog",        no_argument,       0, 17 },
@@ -260,6 +276,22 @@ struct GameStub_F2B : GameStub {
 				_textureScaler = strdup(optarg);
 				_renderParams.textureScaler = _textureScaler;
 				break;
+			case 21:
+				free(_shader);
+				_shader = strdup(optarg);
+				break;
+			case 22: {
+				int width = 0, height = 0;
+				char trailing = 0;
+				if (sscanf(optarg, "%dx%d%c", &width, &height, &trailing) != 2 ||
+					width < 320 || width > 7680 || height < 200 || height > 4320) {
+					fprintf(stderr, "Invalid resolution '%s'; use WIDTHxHEIGHT between 320x200 and 7680x4320\n", optarg);
+					return -1;
+				}
+				_windowWidth = width;
+				_windowHeight = height;
+				break;
+			}
 			case 15:
 				_params.mouseMode = true;
 				break;
@@ -312,6 +344,15 @@ struct GameStub_F2B : GameStub {
 	virtual int getDisplayMode() {
 		return _displayMode;
 	}
+	virtual int getWindowWidth() const {
+		return _windowWidth;
+	}
+	virtual int getWindowHeight() const {
+		return _windowHeight;
+	}
+	virtual const char *getShaderName() const {
+		return _shader ? _shader : "none";
+	}
 	virtual float getAspectRatio(bool widescreen) {
 		return 4 / 3.;
 	}
@@ -359,6 +400,8 @@ struct GameStub_F2B : GameStub {
 		_textureFilter = 0;
 		free(_textureScaler);
 		_textureScaler = 0;
+		free(_shader);
+		_shader = 0;
 	}
 	virtual StubMixProc getMixProc(int rate, int fmt, void (*lock)(int)) {
 		StubMixProc mix;

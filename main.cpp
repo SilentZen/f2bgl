@@ -6,9 +6,11 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "stub.h"
+#include "postprocess.h"
 
 const char *g_caption = "Fade2Black/OpenGL";
 
@@ -51,6 +53,10 @@ static int readKeyMap(FILE *fp) {
 		const char *keyword;
 		int keyMapping;
 	} mappings[] = {
+		{ "move_left", kKeyCodeLeft },
+		{ "move_right", kKeyCodeRight },
+		{ "move_up", kKeyCodeUp },
+		{ "move_down", kKeyCodeDown },
 		{ "gun_mode", kKeyCodeAlt },
 		{ "shoot", kKeyCodeCtrl },
 		{ "walk", kKeyCodeShift },
@@ -296,7 +302,7 @@ int main(int argc, char *argv[]) {
 	}
 	int ret = stub->setArgs(argc, argv);
 	if (ret != 0) {
-		return ret;
+		return ret > 0 ? 0 : ret;
 	}
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC)) {
 		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -306,11 +312,21 @@ int main(int argc, char *argv[]) {
 	bool widescreen = false;
 
 	const int displayMode = stub->getDisplayMode();
+	bool fullscreen = displayMode != kDisplayModeWindow;
+	bool altEnterReturnDown = false;
 	gAspectRatio = stub->getAspectRatio(widescreen);
-	gWindowH = gWindowW / gAspectRatio;
+	gWindowW = stub->getWindowWidth();
+	gWindowH = stub->getWindowHeight();
+	int windowedW = gWindowW;
+	int windowedH = gWindowH;
 	int flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-	if (displayMode != kDisplayModeWindow) {
+	if (fullscreen) {
 		flags |= SDL_WINDOW_FULLSCREEN;
+	}
+	PostProcessor postProcess(stub->getShaderName());
+	if (postProcess.requested()) {
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 	}
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_Window *window = SDL_CreateWindow(g_caption, gWindowW, gWindowH, (SDL_WindowFlags)flags);
@@ -329,7 +345,28 @@ int main(int argc, char *argv[]) {
 	_aspectRatio[3] = 1.;
 	setAspectRatio(gWindowW, gWindowH);
 	SDL_GLContext glcontext = SDL_GL_CreateContext(window);
+	if (!glcontext && postProcess.requested()) {
+		fprintf(stderr, "Compatibility OpenGL 2.1 unavailable; retrying without shader support: %s\n", SDL_GetError());
+		SDL_DestroyWindow(window);
+		SDL_GL_ResetAttributes();
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+		window = SDL_CreateWindow(g_caption, gWindowW, gWindowH, (SDL_WindowFlags)flags);
+		if (!window) {
+			fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+			return -1;
+		}
+		glcontext = SDL_GL_CreateContext(window);
+	}
+	if (!glcontext) {
+		fprintf(stderr, "SDL_GL_CreateContext failed: %s\n", SDL_GetError());
+		SDL_DestroyWindow(window);
+		return -1;
+	}
 	SDL_GL_SetSwapInterval(1);
+	int pixelW = gWindowW;
+	int pixelH = gWindowH;
+	SDL_GetWindowSizeInPixels(window, &pixelW, &pixelH);
+	postProcess.init(pixelW, pixelH);
 	ret = stub->init();
 	if (ret != 0) {
 		return ret;
@@ -394,6 +431,10 @@ int main(int argc, char *argv[]) {
 				}
 				break;
 			case SDL_EVENT_KEY_UP:
+				if (altEnterReturnDown && (ev.key.key == SDLK_RETURN || ev.key.key == SDLK_KP_ENTER)) {
+					altEnterReturnDown = false;
+					break;
+				}
 				if (gKeyScancodeMap[ev.key.scancode] != 0) {
 					stub->queueKeyInput(gKeyScancodeMap[ev.key.scancode], 0);
 				} else {
@@ -451,7 +492,23 @@ int main(int argc, char *argv[]) {
 				}
 				break;
 			case SDL_EVENT_KEY_DOWN:
-				if (gKeyScancodeMap[ev.key.scancode] != 0) {
+				if ((ev.key.key == SDLK_RETURN || ev.key.key == SDLK_KP_ENTER) && (ev.key.mod & SDL_KMOD_ALT)) {
+					if (SDL_SetWindowFullscreen(window, !fullscreen)) {
+						fullscreen = !fullscreen;
+						if (fullscreen) {
+							windowedW = gWindowW;
+							windowedH = gWindowH;
+						} else {
+							SDL_SetWindowSize(window, windowedW, windowedH);
+							w = windowedW;
+							h = windowedH;
+						}
+						stub->queueKeyInput(kKeyCodeAlt, 0);
+						altEnterReturnDown = true;
+					} else {
+						fprintf(stderr, "Unable to toggle fullscreen: %s\n", SDL_GetError());
+					}
+				} else if (gKeyScancodeMap[ev.key.scancode] != 0) {
 					stub->queueKeyInput(gKeyScancodeMap[ev.key.scancode], 1);
 				}
 				break;
@@ -541,12 +598,21 @@ int main(int argc, char *argv[]) {
 			gWindowW = w;
 			gWindowH = h;
 			SDL_SetWindowSize(window, gWindowW, gWindowH);
+			if (!fullscreen) {
+				windowedW = gWindowW;
+				windowedH = gWindowH;
+			}
+			setAspectRatio(gWindowW, gWindowH);
+			SDL_GetWindowSizeInPixels(window, &pixelW, &pixelH);
+			postProcess.resize(pixelW, pixelH);
 			stub->initGL(gWindowW, gWindowH, _aspectRatio);
 		}
 		if (!paused) {
 			const unsigned int ticks = SDL_GetTicks();
+			postProcess.beginFrame();
 			stub->doTick(ticks);
 			stub->drawGL();
+			postProcess.endFrame();
 			SDL_GL_SwapWindow(window);
 			if (stub->shouldVibrate()) {
 				if (controller) {
@@ -564,6 +630,7 @@ int main(int argc, char *argv[]) {
 	}
 	if (gAudioStream) SDL_PauseAudioStreamDevice(gAudioStream);
 	stub->quit();
+	postProcess.shutdown();
 	SDL_GL_DestroyContext(glcontext);
 	SDL_DestroyWindow(window);
 	if (controller) {
